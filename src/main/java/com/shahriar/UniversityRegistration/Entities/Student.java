@@ -1,20 +1,20 @@
 package com.shahriar.UniversityRegistration.Entities;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
-import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 
 import java.util.List;
 
 @Entity
-@Data
+
+@AllArgsConstructor
+@NoArgsConstructor
 @Getter
 @Setter
-@Table(name = "student", indexes = @Index(columnList = "studentID"))
+@Builder
 public class Student {
-
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -25,6 +25,11 @@ public class Student {
 
     @Column(unique = true)
     private String studentID;
-    private String relatedBatch;
 
+    private String relatedBatch;
+    private String password;
+
+    @OneToOne(mappedBy = "student", cascade = CascadeType.ALL)
+    @JsonManagedReference
+    private StudentStatus studentStatus;
 }
