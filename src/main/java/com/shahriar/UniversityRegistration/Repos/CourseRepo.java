@@ -15,12 +15,14 @@ public interface CourseRepo extends JpaRepository<Course, Long> {
     Course findByName(String courseName);
 
     @Query("SELECT c FROM Course c WHERE c.backlogOpen = :backlogStatus AND c.name = :courseName")
-    List<Course> findCoursesByBacklogOpenStatusAndName(
+    List<Course> findCoursesByIrregularStatusAndName(
             @Param("backlogStatus") LogStatus backlogStatus,
             @Param("courseName") String courseName
     );
 
-    @Query("SELECT c FROM Course c WHERE c.studentStatus.id = :pk")
-    Course findByPkOfStudentStatus(@Param("pk") Long statusPK);
+    @Query("SELECT c FROM Course c WHERE c.studentStatus.id = :pk AND c.backlogOpen = :status")
+    Course findByPkOfStudentStatus(@Param("pk") Long statusPK,
+                                   @Param("status") LogStatus logStatus
+    );
 
 }

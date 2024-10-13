@@ -7,11 +7,11 @@ import lombok.*;
 
 import java.util.List;
 
+
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
-@Getter
-@Setter
+@Data
 @Builder
 public class StudentStatus {
 
@@ -33,9 +33,12 @@ public class StudentStatus {
     @JsonIgnore
     private List<Course> backlogCourses;
 
+//    public boolean isOpenCredit() {
+//        return openCredit;
+//    }
+
     private double completedCredit;
     private boolean openCredit;
-
 
     @OneToOne
     @JoinColumn(name = "student_id", referencedColumnName = "studentID") // Join using studentID

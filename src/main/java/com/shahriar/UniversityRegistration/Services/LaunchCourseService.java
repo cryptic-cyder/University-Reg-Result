@@ -1,18 +1,42 @@
+//    private List<Course> findOpenCreditStudents() {
+//
+//        List<StudentStatus> openCreditStudentStatus = statusRepo.findByOpenCredit(true);
+//        throwNoResourceException(openCreditStudentStatus, "No open credit student status is found...");
+//
+//        //        return openCreditStudentStatus.stream()
+////                .map(s ->
+////                        courseRepo.findByPkOfStudentStatus(s.getId())
+////                ).collect(Collectors.toList());
+//
+//        List<Course> openCreditStudents = new ArrayList<>();
+//
+//        for (StudentStatus s : openCreditStudentStatus) {
+//
+//            Long id = s.getId();
+//
+//            Course course = courseRepo.findByPkOfStudentStatus(id, LogStatus.AVAILABLE);
+//
+//            if (course != null)
+//                openCreditStudents.add(course);
+//        }
+//
+//        return openCreditStudents;
+//    }
+
 package com.shahriar.UniversityRegistration.Services;
 
+import com.shahriar.UniversityRegistration.Config.NotFoundException;
 import com.shahriar.UniversityRegistration.Entities.*;
 import com.shahriar.UniversityRegistration.Repos.AccountRepo;
 import com.shahriar.UniversityRegistration.Repos.CourseRegRepo;
 import com.shahriar.UniversityRegistration.Repos.CourseRepo;
 import com.shahriar.UniversityRegistration.Repos.StudentStatusRepo;
-import org.apache.tomcat.util.net.jsse.JSSEUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -30,50 +54,70 @@ public class LaunchCourseService {
     @Autowired
     private CourseRepo courseRepo;
 
+    public StudentStatus getStudentStatus(String studentID) {
+
+        StudentStatus status = statusRepo.findByStudentID(studentID);
+
+        if (status == null) {
+            throw new NotFoundException("No status found for student ID: " + studentID);
+        }
+        return status;
+    }
+
 
     public void addCourse(List<CourseDTO> DTOs) {
 
-        addCoursesToRegularBatch(DTOs);
-        addCoursesToLogAndOpenCredits(DTOs);
+        assignCourseToBatch(DTOs);
+        assignCourseToIrregular(DTOs);
 
     }
 
-    private void addCoursesToRegularBatch(List<CourseDTO> dtOs) {
+    private void assignCourseToBatch(List<CourseDTO> DTOs) {
 
-        List<Student> studentsOfThatBatch = findingAllStudentsOfSpecificYear(dtOs);
+        List<Student> regularBatchStudent = getStudentByBatch(DTOs);
 
-        for (Student student : studentsOfThatBatch) {
+        for (Student student : regularBatchStudent) {
 
-            StudentStatus studentStatus = statusRepo.findByStudentID(student.getStudentID());
-            throwNoResourceException(studentStatus, "No students status found for " + student.getName());
+            try {
 
-            List<Course> courses = convertingDTOlistIntoCourse(dtOs, student.getStudentID());
+                StudentStatus status = getStudentStatus(student.getStudentID());
 
-            oneToManyConnection(studentStatus, courses);
+                List<Course> courses = convertingDTOListIntoCourse(DTOs, student.getStudentID());
 
-            manyToOneConnection(studentStatus, courses);
+                oneToManyConnection(status, courses);
 
-            statusRepo.save(studentStatus);
+                manyToOneConnection(status, courses);
+
+                statusRepo.save(status);
+            }
+            catch (NotFoundException e) {
+
+                System.out.println("\n\nSkipping student " + student.getName() + ": " + e.getMessage());
+            }
         }
     }
 
-    private void addCoursesToLogAndOpenCredits(List<CourseDTO> dtOs) {
+    private void assignCourseToIrregular(List<CourseDTO> DTOs) {
 
-        for (CourseDTO dto : dtOs) { //Opening course for log and open-credit students
+        List<Course> log = new ArrayList<>();
 
-            String courseName = dto.getName();
+        for (CourseDTO courseDTO : DTOs) {
 
-            List<Course> courses = courseRepo.findCoursesByBacklogOpenStatusAndName(LogStatus.ACTIVE, courseName);
+            String courseName = courseDTO.getName();
 
-            List<Course> openCreditStudents = findOpenCreditStudents();
+            List<Course> specific = courseRepo.findCoursesByIrregularStatusAndName(LogStatus.ACTIVE, courseName);
 
-            courses.addAll(openCreditStudents);
-
-            changingStatusOfLogAvailable(courses);
+            log.addAll(specific);
         }
+
+       if(log.isEmpty())
+           throw new NotFoundException("No irregular student is present...");
+
+        changeLogStatus(log);
+
     }
 
-    private void changingStatusOfLogAvailable(List<Course> courses) {
+    private void changeLogStatus(List<Course> courses) {
 
         courses.forEach(course -> {
 
@@ -84,53 +128,21 @@ public class LaunchCourseService {
         });
     }
 
-    private List<Course> findOpenCreditStudents() {
 
-        List<StudentStatus> openCreditStudentStatus = statusRepo.findByOpenCredit(true);
+    public List<Student> getStudentByBatch(List<CourseDTO> DTOs) {
 
-//        return openCreditStudentStatus.stream()
-//                .map(s ->
-//                        courseRepo.findByPkOfStudentStatus(s.getId())
-//                ).collect(Collectors.toList());
+        String relatedBatch = DTOs.get(0).getRelatedBatch();
 
-        List<Course> openCreditStudents = new ArrayList<>();
+        List<Student> batchStudents = accountRepo.findByRelatedBatch(relatedBatch);
 
-        for (StudentStatus s : openCreditStudentStatus) {
-
-            Long id = s.getId();
-
-            Course course = courseRepo.findByPkOfStudentStatus(id);
-
-            openCreditStudents.add(course);
+        if (batchStudents.isEmpty()) {
+            throw new NotFoundException("No irregular student is present in batch "+relatedBatch);
         }
 
-        return openCreditStudents;
+        return batchStudents;
     }
 
-    public List<Student> findingAllStudentsOfSpecificYear(List<CourseDTO> DTOs) {
-
-        String relatedBatch = DTOs.get(0).getRelatedBatch();
-
-        List<Student> studentListRelatedYear = accountRepo.findByRelatedBatch(relatedBatch);
-
-        throwNoResourceException(studentListRelatedYear, "No students found for that batch: " + relatedBatch);
-
-        return studentListRelatedYear;
-    }
-
-    public List<Student> findingAllStudentWithBacklog(List<CourseDTO> DTOs) {
-
-        String relatedBatch = DTOs.get(0).getRelatedBatch();
-
-        List<Student> studentListRelatedYear = accountRepo.findByRelatedBatch(relatedBatch);
-
-        throwNoResourceException(studentListRelatedYear, "No students found for that batch: " + relatedBatch);
-
-        return studentListRelatedYear;
-    }
-
-
-    public List<Course> convertingDTOlistIntoCourse(List<CourseDTO> DTOs, String studentID) {
+    public List<Course> convertingDTOListIntoCourse(List<CourseDTO> DTOs, String studentID) {
 
         return DTOs.stream()
                 .map(dto -> Course.builder()
@@ -160,19 +172,7 @@ public class LaunchCourseService {
         // Back connection----> For many to one
         for (Course course : courses) {
             course.setStudentStatus(studentStatus);
-            //course.setCourseReg();
         }
     }
 
-    private void throwNoResourceException(List<Student> studentListRelatedYear, String message) {
-
-        if (studentListRelatedYear == null || studentListRelatedYear.isEmpty())
-            throw new NoSuchElementException(message);
-    }
-
-    private void throwNoResourceException(StudentStatus studentStatus, String message) {
-
-        if (studentStatus == null)
-            throw new NoSuchElementException(message);
-    }
 }
