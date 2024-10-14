@@ -1,7 +1,6 @@
-package com.shahriar.UniversityRegistration.Config;
+package com.shahriar.UniversityRegistration.Exception;
 
 public class NotFoundException extends RuntimeException{
-
 
     public NotFoundException(String message) {
         super(message);

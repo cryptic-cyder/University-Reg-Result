@@ -1,11 +1,10 @@
 package com.shahriar.UniversityRegistration.Services;
 
-import com.shahriar.UniversityRegistration.Entities.Course;
+import com.shahriar.UniversityRegistration.Exception.NotFoundException;
+import com.shahriar.UniversityRegistration.Entities.CourseDTO;
 import com.shahriar.UniversityRegistration.Entities.Student;
 import com.shahriar.UniversityRegistration.Entities.StudentStatus;
 import com.shahriar.UniversityRegistration.Repos.AccountRepo;
-import com.shahriar.UniversityRegistration.Repos.StudentStatusRepo;
-import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -19,6 +18,9 @@ public class AccountService {
     @Autowired
     private AccountRepo accountRepo;
 
+    @Autowired
+    private DefaultValidationStrategy validation;
+
     public Student createAccount(String name,
                                  String studentGmail,
                                  String studentID,
@@ -26,9 +28,8 @@ public class AccountService {
                                  String password,
                                  ValidationStrategy strategy) {
 
-        try {
-
-            strategy.validate(studentGmail, studentID);
+            validation.validateEmail(studentGmail);
+            validation.validateStudentId(studentID);
 
             Student account = Student.builder()
                     .name(name)
@@ -50,14 +51,19 @@ public class AccountService {
             studentStatus.setStudent(account);
 
             return accountRepo.save(account);// Save the student, this will also save the studentStatus due to CascadeType.ALL
-        }
-        catch (IllegalArgumentException ie) {
-            System.out.println("Validation error: " + ie.getMessage());
-            throw ie;
-        }
-        catch (Exception e) {
-            System.out.println("Unexpected error occurred: " + e.getMessage());
-            throw new RuntimeException("Error creating account", e);
-        }
     }
+
+    public List<Student> getStudentByBatch(List<CourseDTO> DTOs) {
+
+        String relatedBatch = DTOs.get(0).getRelatedBatch();
+
+        List<Student> batchStudents = accountRepo.findByRelatedBatch(relatedBatch);
+
+        if (batchStudents.isEmpty()) {
+            throw new NotFoundException("No irregular student is present in batch "+relatedBatch);
+        }
+
+        return batchStudents;
+    }
+
 }
